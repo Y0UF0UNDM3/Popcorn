@@ -1,64 +1,42 @@
+/* Warm Doodle Aesthetic: No Neon, No Dark Mode */
 body, html {
     margin: 0; padding: 0;
     width: 100%; height: 100%;
-    background: radial-gradient(circle, #1a1a1a 0%, #000 100%);
-    color: #fff; font-family: 'Segoe UI', sans-serif;
+    background: #fdf5e6; /* Soft cream paper texture */
+    font-family: 'Comic Sans MS', cursive, sans-serif;
+    color: #5d4037; /* Deep brown cocoa text */
     overflow: hidden;
 }
 
-#ui-container {
-    position: absolute; top: 0; left: 0;
-    width: 100%; height: 100%;
-    pointer-events: none;
+#pan-container {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 780px; height: 780px;
+    background: #d7ccc8; /* Soft metal pan gray */
+    border: 12px solid #8d6e63; /* Wooden pan rim */
+    border-radius: 50%;
+    box-shadow: inset 0 10px 30px rgba(0,0,0,0.1);
 }
 
 .overlay {
     position: absolute; top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    text-align: center; pointer-events: auto;
-    background: rgba(0,0,0,0.9);
-    padding: 60px; border-radius: 40px;
-    border: 4px solid #f1c40f;
-    display: none;
+    background: #fff; padding: 40px;
+    border: 8px solid #fbc02d; border-radius: 25px;
+    text-align: center; z-index: 100;
+    box-shadow: 0 8px 0 #f9a825;
 }
 
-.overlay.active { display: block; }
-
-.logo {
-    font-size: 64px; font-weight: 900;
-    color: #f1c40f; text-shadow: 0 0 20px rgba(241,196,15,0.5);
-    margin-bottom: 10px;
+.class-btn {
+    display: inline-block; width: 110px; margin: 8px; padding: 12px;
+    background: #fffde7; border: 3px solid #fbc02d; border-radius: 12px;
+    cursor: pointer; transition: 0.1s; font-weight: bold;
 }
 
-.class-selection { display: flex; gap: 20px; margin-top: 40px; }
-
-.class-card {
-    background: #222; padding: 25px;
-    border-radius: 20px; cursor: pointer;
-    transition: 0.3s; border: 2px solid transparent;
-    width: 150px;
-}
-
-.class-card:hover {
-    transform: translateY(-10px);
-    border-color: #f1c40f; background: #333;
-}
+.class-btn:active { transform: translateY(4px); box-shadow: none; }
 
 #hud {
-    position: absolute; top: 20px; width: 100%;
-    display: flex; justify-content: space-between;
-    padding: 0 40px; box-sizing: border-box;
-}
-
-.stats { font-size: 32px; font-weight: bold; }
-
-.health-container {
-    width: 400px; height: 15px;
-    background: #333; border: 1px solid #fff;
-    border-radius: 10px; overflow: hidden; margin-top: 5px;
-}
-
-#boss-hp-bar {
-    width: 100%; height: 100%;
-    background: linear-gradient(90deg, #e74c3c, #f1c40f);
+    position: absolute; top: 15px; width: 100%;
+    display: flex; justify-content: center; gap: 40px;
+    font-size: 22px; font-weight: bold; pointer-events: none;
 }
