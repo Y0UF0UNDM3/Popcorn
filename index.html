@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kernel Battle Royale - Popcorn Edition</title>
+    <style>
+        body, html { margin: 0; padding: 0; overflow: hidden; background: #1a1a1a; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        canvas { display: block; filter: drop-shadow(0 0 20px rgba(0,0,0,0.5)); }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; color: white; }
+        .menu { pointer-events: auto; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; background: rgba(0,0,0,0.85); padding: 40px; border-radius: 20px; border: 4px solid #f1c40f; }
+        .btn { padding: 15px 30px; font-size: 20px; cursor: pointer; background: #f1c40f; border: none; border-radius: 10px; color: #333; font-weight: bold; margin: 10px; transition: 0.3s; }
+        .btn:hover { transform: scale(1.1); background: #f39c12; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="ui-layer">
+        <div id="start-menu" class="menu">
+            <h1 style="color: #f1c40f; font-size: 48px; margin-bottom: 10px;">KERNEL CHAOS</h1>
+            <p>60 Kernels. 4 Bosses. Last One Standing Wins.</p>
+            <div id="class-select">
+                <button class="btn" onclick="startGame('HEAL')">HEALER</button>
+                <button class="btn" onclick="startGame('SHIELD')">SHIELDER</button>
+                <button class="btn" onclick="startGame('THROW')">THROWER</button>
+            </div>
+        </div>
+        <div id="game-info" style="position: absolute; top: 20px; left: 20px; font-size: 24px;">
+            Alive: <span id="alive-count">60</span> | Round: <span id="round-name">BUTTER</span>
+        </div>
+    </div>
+
+<script>
+/**
+ * KERNEL CHAOS - GAME ENGINE
+ * Architecture: Canvas 2D, OOP, State-Based Boss Logic
+ */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const uiAlive = document.getElementById('alive-count');
+const uiRound = document.getElementById('round-name');
+
+// --- Configuration ---
+let GAME_STATE = 'MENU';
+const TOTAL_PLAYERS = 60;
+const ARENA_RADIUS = 350;
+let players = [];
+let projectiles = [];
+let particles = [];
+let currentBoss = null;
+let frameCount = 0;
+
+// Resize Handler
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- Vector Math ---
+const vec2 = {
+    dist: (a, b) => Math.sqrt((a.x - b.x)**2 + (a.y - b.y)**2),
+    angle: (a, b) => Math.atan2(b.y - a.y, b.x - a.x),
+    lerp: (a, b, t) => a + (b - a) * t
+};
+
+// --- Classes ---
+class Player {
+    constructor(x, y, isBot = true, type = 'HEAL') {
+        this.x = x; this.y = y;
+        this.isBot = isBot;
+        this.type = type;
+        this.radius = 12;
+        this.hp = 2; // Google Doodle Popcorn standard
+        this.alive = true;
+        this.speed = 4;
+        this.color = type === 'HEAL' ? '#2ecc71' : type === 'SHIELD' ? '#3498db' : '#e67e22';
+        this.abilityCooldown = 0;
+        this.abilityActive = 0;
+        this.input = { x: 0, y: 0 };
+    }
+
+    update() {
+        if (!this.alive) return;
+
+        if (this.isBot) {
+            this.runAI();
+        } else {
+            this.handleInput();
+        }
+
+        // Movement
+        this.x += this.input.x * this.speed;
+        this.y += this.input.y * this.speed;
+
+        // Boundary Check (Circular Arena)
+        const d = vec2.dist(this, { x: canvas.width/2, y: canvas.height/2 });
+        if (d > ARENA_RADIUS) {
+            const angle = vec2.angle({ x: canvas.width/2, y: canvas.height/2 }, this);
+            this.x = canvas.width/2 + Math.cos(angle) * ARENA_RADIUS;
+            this.y = canvas.height/2 + Math.sin(angle) * ARENA_RADIUS;
+        }
+
+        if (this.abilityCooldown > 0) this.abilityCooldown--;
+        if (this.abilityActive > 0) this.abilityActive--;
+    }
+
+    runAI() {
+        // High-end AI: Avoid closest dangerous projectile
+        let nearestProj = null;
+        let minDist = 100;
+        
+        projectiles.forEach(p => {
+            let d = vec2.dist(this, p);
+            if (d < minDist) {
+                minDist = d;
+                nearestProj = p;
+            }
+        });
+
+        if (nearestProj) {
+            const angle = vec2.angle(nearestProj, this);
+            this.input.x = Math.cos(angle);
+            this.input.y = Math.sin(angle);
+            
+            // Use ability if too close
+            if (minDist < 40 && this.abilityCooldown === 0) {
+                this.useAbility();
+            }
+        } else {
+            // Idle movement toward center
+            const angle = vec2.angle(this, { x: canvas.width/2, y: canvas.height/2 });
+            this.input.x = Math.cos(angle) * 0.5;
+            this.input.y = Math.sin(angle) * 0.5;
+        }
+    }
+
+    handleInput() {
+        // Handled by key listeners
+    }
+
+    useAbility() {
+        if (this.abilityCooldown > 0) return;
+        this.abilityActive = 60; // 1 second
+        this.abilityCooldown = 180; // 3 seconds
+        
+        if (this.type === 'HEAL') {
+            // Logic to absorb nearby small projectiles
+            projectiles = projectiles.filter(p => {
+                if (vec2.dist(this, p) < 60) {
+                    createParticles(p.x, p.y, this.color, 5);
+                    return false;
+                }
+                return true;
+            });
+        }
+    }
+
+    draw() {
+        if (!this.alive) return;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        
+        // Ability Ring
+        if (this.abilityActive > 0) {
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+}
+
+class Boss {
+    constructor() {
+        this.x = canvas.width/2;
+        this.y = canvas.height/2;
+        this.hp = 100;
+        this.phase = 1;
+        this.round = 1; // 1: Butter, 2: Salt, 3: Fire, 4: Microwave
+    }
+
+    update() {
+        // Pattern 1: Circular burst
+        if (frameCount % 60 === 0) {
+            for(let i=0; i<8; i++) {
+                const angle = (i / 8) * Math.PI * 2 + (frameCount * 0.01);
+                projectiles.push(new Projectile(this.x, this.y, Math.cos(angle)*3, Math.sin(angle)*3));
+            }
+        }
+    }
+
+    draw() {
+        ctx.fillStyle = '#f1c40f';
+        ctx.font = 'bold 40px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(uiRound.innerText, this.x, this.y - 100);
+        
+        // Core visual
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 50 + Math.sin(frameCount*0.1)*5, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(241, 196, 15, 0.3)';
+        ctx.fill();
+    }
+}
+
+class Projectile {
+    constructor(x, y, vx, vy) {
+        this.x = x; this.y = y;
+        this.vx = vx; this.vy = vy;
+        this.radius = 5;
+    }
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+    }
+    draw() {
+        ctx.fillStyle = '#ff7675';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+        ctx.fill();
+    }
+}
+
+function createParticles(x, y, color, count) {
+    for(let i=0; i<count; i++) {
+        particles.push({
+            x, y, 
+            vx: (Math.random()-0.5)*10, 
+            vy: (Math.random()-0.5)*10,
+            life: 1.0,
+            color
+        });
+    }
+}
+
+// --- Core Loop ---
+function loop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw Arena
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.arc(canvas.width/2, canvas.height/2, ARENA_RADIUS, 0, Math.PI*2);
+    ctx.stroke();
+
+    if (GAME_STATE === 'PLAYING') {
+        frameCount++;
+        currentBoss.update();
+        currentBoss.draw();
+
+        players.forEach(p => {
+            p.update();
+            p.draw();
+        });
+
+        projectiles.forEach((p, idx) => {
+            p.update();
+            p.draw();
+            
+            // Collision
+            players.forEach(player => {
+                if (player.alive && vec2.dist(p, player) < player.radius + p.radius) {
+                    if (player.abilityActive === 0) {
+                        player.hp--;
+                        projectiles.splice(idx, 1);
+                        createParticles(player.x, player.y, player.color, 10);
+                        if (player.hp <= 0) player.alive = false;
+                    }
+                }
+            });
+
+            // Cleanup
+            if (vec2.dist(p, {x: canvas.width/2, y: canvas.height/2}) > 1000) projectiles.splice(idx, 1);
+        });
+
+        // Update UI
+        uiAlive.innerText = players.filter(p => p.alive).length;
+    }
+
+    requestAnimationFrame(loop);
+}
+
+// --- Input Handling ---
+const keys = {};
+window.onkeydown = e => {
+    keys[e.code] = true;
+    if (e.code === 'Space') {
+        const player = players.find(p => !p.isBot);
+        if (player) player.useAbility();
+    }
+};
+window.onkeyup = e => keys[e.code] = false;
+
+function processPlayerInput() {
+    const player = players.find(p => !p.isBot);
+    if (!player) return;
+    player.input.x = 0; player.input.y = 0;
+    if (keys['ArrowUp'] || keys['KeyW']) player.input.y = -1;
+    if (keys['ArrowDown'] || keys['KeyS']) player.input.y = 1;
+    if (keys['ArrowLeft'] || keys['KeyA']) player.input.x = -1;
+    if (keys['ArrowRight'] || keys['KeyD']) player.input.x = 1;
+}
+setInterval(processPlayerInput, 1000/60);
+
+// --- Initialization ---
+function startGame(selectedType) {
+    document.getElementById('start-menu').style.display = 'none';
+    GAME_STATE = 'PLAYING';
+    
+    // Human Player
+    players.push(new Player(canvas.width/2, canvas.height/2 + 200, false, selectedType));
+    
+    // AI Bots (filling the match)
+    const types = ['HEAL', 'SHIELD', 'THROW'];
+    for(let i=0; i < TOTAL_PLAYERS - 1; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * ARENA_RADIUS;
+        players.push(new Player(
+            canvas.width/2 + Math.cos(angle)*dist,
+            canvas.height/2 + Math.sin(angle)*dist,
+            true,
+            types[Math.floor(Math.random()*types.length)]
+        ));
+    }
+
+    currentBoss = new Boss();
+    loop();
+}
+</script>
+</body>
+</html>
