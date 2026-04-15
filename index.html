@@ -2,235 +2,87 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kernel Insurgency: Elite Edition</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Google Doodle: Celebrating Popcorn (Fan Remake)</title>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #fdf5e6; overflow: hidden; font-family: 'Comic Sans MS', cursive, sans-serif; color: #5d4037; }
+        #pan { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 800px; height: 800px; background: #e0e0e0; border: 15px solid #8d6e63; border-radius: 50%; box-shadow: inset 0 0 50px rgba(0,0,0,0.1); }
+        .overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border: 10px solid #fbc02d; border-radius: 20px; text-align: center; z-index: 100; box-shadow: 0 10px 0 #f9a825; }
+        .class-btn { display: inline-block; width: 120px; margin: 10px; padding: 15px; background: #fffde7; border: 4px solid #fbc02d; border-radius: 15px; cursor: pointer; transition: 0.2s; font-weight: bold; }
+        .class-btn:hover { transform: translateY(-5px); background: #fff9c4; }
+        #hud { position: absolute; top: 20px; width: 100%; display: flex; justify-content: center; gap: 50px; font-size: 24px; font-weight: bold; pointer-events: none; }
+    </style>
 </head>
 <body>
-    <div id="ui-container">
-        <!-- Main Menu -->
-        <div id="main-menu" class="overlay active">
-            <div class="logo">KERNEL INSURGENCY</div>
-            <p>60 Kernels. 4 Legendary Bosses. survive or pop.</p>
-            <div class="class-selection">
-                <div class="class-card" onclick="startGame('HEAL')">
-                    <div class="icon">💚</div>
-                    <div class="label">HEALER</div>
-                    <div class="desc">Absorbs projectiles to recover.</div>
-                </div>
-                <div class="class-card" onclick="startGame('SHIELD')">
-                    <div class="icon">🛡️</div>
-                    <div class="label">SHIELDER</div>
-                    <div class="desc">Reflects shots back at bosses.</div>
-                </div>
-                <div class="class-card" onclick="startGame('THROW')">
-                    <div class="icon">💥</div>
-                    <div class="label">STRIKER</div>
-                    <div class="desc">Catches and hurls danger back.</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- HUD -->
-        <div id="hud">
-            <div class="stats">ALIVE: <span id="alive-count">60</span></div>
-            <div id="boss-display">
-                <div id="boss-name">BUTTER PHASE</div>
-                <div class="health-container"><div id="boss-hp-bar"></div></div>
-            </div>
-        </div>
+    <div id="pan"></div>
+    <div id="hud"><div>KERNELS: <span id="count">60</span></div><div id="boss-name">BUTTER</div></div>
+    <div id="menu" class="overlay">
+        <h1 style="margin-top:0;">POPCORN!</h1>
+        <div class="class-btn" onclick="start('HEAL')">HEALER<br>💚</div>
+        <div class="class-btn" onclick="start('SHIELD')">SHIELD<br>🛡️</div>
+        <div class="class-btn" onclick="start('THROW')">THROW<br>💥</div>
     </div>
-
-    <canvas id="gameCanvas"></canvas>
+    <canvas id="stage" style="position:absolute; top:0; left:0;"></canvas>
 
     <script>
-        /**
-         * KERNEL INSURGENCY ENGINE v5.0
-         * Architected for 3000+ line expansibility.
-         */
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        let width, height, player, boss, gameState = 'MENU';
-        let entities = [], projectiles = [], particles = [], frameCount = 0;
+        const canvas = document.getElementById('stage'), ctx = canvas.getContext('2d');
+        let W, H, player, entities = [], bullets = [], frame = 0, state = 'MENU';
+        const PAN_RADIUS = 380;
 
-        // --- Vectors & Math ---
-        class Vec2 {
-            constructor(x, y) { this.x = x; this.y = y; }
-            add(v) { return new Vec2(this.x + v.x, this.y + v.y); }
-            sub(v) { return new Vec2(this.x - v.x, this.y - v.y); }
-            dist(v) { return Math.sqrt((this.x - v.x)**2 + (this.y - v.y)**2); }
-            lerp(v, t) { return new Vec2(this.x + (v.x - this.x) * t, this.y + (v.y - this.y) * t); }
-        }
-
-        // --- Procedural Kernel Design ---
-        function renderKernel(ctx, x, y, size, color, isShielded, expr = 'neutral') {
-            ctx.save();
-            ctx.translate(x, y);
-            
-            // The organic teardrop body
-            ctx.beginPath();
-            ctx.moveTo(0, -size * 1.5);
-            ctx.bezierCurveTo(size * 1.2, -size, size * 1.2, size, 0, size);
-            ctx.bezierCurveTo(-size * 1.2, size, -size * 1.2, -size, 0, -size * 1.5);
-            ctx.fillStyle = color;
-            ctx.fill();
-
-            // Expressive Eyes
-            ctx.fillStyle = "white";
-            ctx.beginPath(); 
-            ctx.arc(-size/3, -size/5, size/4, 0, 7); 
-            ctx.arc(size/3, -size/5, size/4, 0, 7); 
-            ctx.fill();
-            
-            ctx.fillStyle = "black";
-            let offset = expr === 'scared' ? Math.sin(frameCount * 0.2) * 2 : 0;
-            ctx.beginPath(); 
-            ctx.arc(-size/3, -size/5 + offset, size/10, 0, 7); 
-            ctx.arc(size/3, -size/5 + offset, size/10, 0, 7); 
-            ctx.fill();
-
-            if (isShielded) {
-                ctx.beginPath();
-                ctx.arc(0, 0, size * 2.2, 0, Math.PI * 2);
-                ctx.strokeStyle = "rgba(0, 210, 255, 0.6)";
-                ctx.lineWidth = 5;
-                ctx.stroke();
+        function drawKernel(x, y, type, status, isShielded) {
+            ctx.save(); ctx.translate(x, y);
+            if (status === 'POPPED') {
+                ctx.fillStyle = '#fff'; ctx.beginPath(); // Fluffy popcorn shape
+                for(let i=0; i<6; i++) ctx.arc(Math.cos(i)*8, Math.sin(i)*8, 12, 0, 7); ctx.fill();
+            } else {
+                ctx.fillStyle = type === 'HEAL' ? '#81c784' : type === 'SHIELD' ? '#64b5f6' : '#ffb74d';
+                ctx.beginPath(); // Hand-drawn asymmetric kernel
+                ctx.moveTo(0, -15); ctx.bezierCurveTo(12, -10, 10, 15, 0, 15); ctx.bezierCurveTo(-10, 15, -12, -10, 0, -15); ctx.fill();
+                ctx.fillStyle = '#3e2723'; ctx.beginPath(); ctx.arc(-4, -4, 2, 0, 7); ctx.arc(4, -4, 2, 0, 7); ctx.fill();
             }
+            if (isShielded) { ctx.strokeStyle = '#4fc3f7'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, 25, 0, 7); ctx.stroke(); }
             ctx.restore();
         }
 
-        // --- Actor Logic ---
         class Kernel {
-            constructor(x, y, type, isBot = true) {
-                this.pos = new Vec2(x, y);
-                this.target = new Vec2(x, y);
-                this.type = type;
-                this.isBot = isBot;
-                this.hp = 2;
-                this.cooldown = 0;
-                this.activeTimer = 0;
-                this.color = type === 'HEAL' ? '#2ecc71' : type === 'SHIELD' ? '#3498db' : '#e67e22';
+            constructor(x, y, type, isBot) {
+                this.x = x; this.y = y; this.type = type; this.isBot = isBot;
+                this.hp = 2; this.shield = 0; this.cooldown = 0;
+                this.target = {x, y};
             }
-
             update() {
                 if (this.hp <= 0) return;
-                
                 if (this.isBot) {
-                    this.runTacticalAI();
-                } else {
-                    this.pos = this.pos.lerp(this.target, 0.15);
-                }
-
-                if (this.cooldown > 0) this.cooldown--;
-                if (this.activeTimer > 0) this.activeTimer--;
-            }
-
-            runTacticalAI() {
-                // SALT PHASE FRONTLINE LOGIC
-                if (boss && boss.phase === 'SALT' && this.type === 'SHIELD') {
-                    this.target.x = boss.pos.x + Math.sin(frameCount * 0.05 + entities.indexOf(this)) * 150;
-                    this.target.y = boss.pos.y + 140; // Frontline Wall
-                    if (this.cooldown === 0) this.useAbility();
-                } else {
-                    // Standard survival & dodging
-                    let threat = this.getNearestProjectile();
-                    if (threat && threat.dist < 80) {
-                        let diff = this.pos.sub(threat.p.pos);
-                        this.target = this.pos.add(new Vec2(diff.x * 2, diff.y * 2));
-                    } else if (frameCount % 120 === 0) {
-                        this.target = new Vec2(Math.random() * width, height - 300 + Math.random() * 250);
+                    // SALT FRONTLINE: Move to guard center if Salt round
+                    if (document.getElementById('boss-name').innerText === 'SALT' && this.type === 'SHIELD') {
+                        this.target = { x: W/2 + Math.sin(frame*0.05)*100, y: H/2 - 150 };
+                        if (this.cooldown === 0) this.shield = 100, this.cooldown = 400;
+                    } else if (frame % 60 === 0) {
+                        this.target = { x: W/2 + (Math.random()-0.5)*500, y: H/2 + 200 + (Math.random()-0.5)*150 };
                     }
                 }
-                this.pos = this.pos.lerp(this.target, 0.08);
-            }
-
-            getNearestProjectile() {
-                let min = 1000, found = null;
-                projectiles.forEach(p => {
-                    let d = this.pos.dist(p.pos);
-                    if (d < min) { min = d; found = p; }
-                });
-                return found ? {p: found, dist: min} : null;
-            }
-
-            useAbility() {
-                if (this.cooldown > 0) return;
-                this.activeTimer = 90;
-                this.cooldown = 350;
-            }
-        }
-
-        class Boss {
-            constructor() {
-                this.pos = new Vec2(width/2, 180);
-                this.hp = 10000;
-                this.phase = 'BUTTER';
-            }
-            update() {
-                if (frameCount % 45 === 0) this.attack();
-            }
-            attack() {
-                for(let i=0; i<16; i++) {
-                    let ang = (i/16) * Math.PI * 2 + (frameCount * 0.02);
-                    projectiles.push({ pos: new Vec2(this.pos.x, this.pos.y), vx: Math.cos(ang)*5, vy: Math.sin(ang)*5 });
+                this.x += (this.target.x - this.x) * 0.1; this.y += (this.target.y - this.y) * 0.1;
+                // PAN LIMIT: Strict circular boundary
+                let dist = Math.hypot(this.x - W/2, this.y - H/2);
+                if (dist > PAN_RADIUS) {
+                    let angle = Math.atan2(this.y - H/2, this.x - W/2);
+                    this.x = W/2 + Math.cos(angle) * PAN_RADIUS; this.y = H/2 + Math.sin(angle) * PAN_RADIUS;
                 }
+                if (this.shield > 0) this.shield--; if (this.cooldown > 0) this.cooldown--;
             }
         }
 
-        // --- Core Lifecycle ---
-        function startGame(cl) {
-            document.getElementById('main-menu').classList.remove('active');
-            resize();
-            
-            // Scattered spawn for 59 bots
-            for(let i=0; i<59; i++) {
-                let tx = Math.random() * width;
-                let ty = height - 100 - Math.random() * 200;
-                let type = i % 3 === 0 ? 'HEAL' : i % 3 === 1 ? 'SHIELD' : 'THROW';
-                entities.push(new Kernel(tx, ty, type, true));
-            }
-            
-            player = new Kernel(width/2, height-150, cl, false);
-            entities.push(player);
-            boss = new Boss();
-            gameState = 'PLAYING';
-            loop();
+        function start(t) {
+            document.getElementById('menu').style.display = 'none';
+            W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight;
+            for(let i=0; i<59; i++) entities.push(new Kernel(W/2, H/2 + 200, i%3==0?'HEAL':i%3==1?'SHIELD':'THROW', true));
+            player = new Kernel(W/2, H/2 + 300, t, false); entities.push(player);
+            state = 'PLAYING'; loop();
         }
 
-        function resize() {
-            width = canvas.width = window.innerWidth;
-            height = canvas.height = window.innerHeight;
-        }
-
-        window.onresize = resize;
-        window.onmousemove = e => { if (player) player.target = new Vec2(e.clientX, e.clientY); };
-        window.onkeydown = e => { if (e.code === 'Space' && player) player.useAbility(); };
-
+        window.onmousemove = e => { if (player) player.target = { x: e.clientX, y: e.clientY }; };
         function loop() {
-            ctx.clearRect(0,0,width,height);
-            if (gameState !== 'PLAYING') return;
-            frameCount++;
-            
-            boss.update();
-            entities.forEach(e => {
-                e.update();
-                renderKernel(ctx, e.pos.x, e.pos.y, 18, e.color, e.activeTimer > 0, e.hp < 2 ? 'scared' : 'neutral');
-            });
-
-            projectiles.forEach((p, i) => {
-                p.pos.x += p.vx; p.pos.y += p.vy;
-                ctx.fillStyle = "white";
-                ctx.beginPath(); ctx.arc(p.pos.x, p.pos.y, 5, 0, 7); ctx.fill();
-                
-                entities.forEach(e => {
-                    if (e.hp > 0 && e.pos.dist(p.pos) < 22) {
-                        if (e.activeTimer <= 0) e.hp--;
-                        projectiles.splice(i, 1);
-                    }
-                });
-            });
-
-            document.getElementById('alive-count').innerText = entities.filter(e => e.hp > 0).length;
+            ctx.clearRect(0, 0, W, H); frame++;
+            entities.forEach(e => { e.update(); drawKernel(e.x, e.y, e.type, e.hp > 0 ? 'LIVE' : 'POPPED', e.shield > 0); });
             requestAnimationFrame(loop);
         }
     </script>
