@@ -3,248 +3,236 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kernel Insurgency: Popcorn Royale</title>
-    <style>
-        :root { --butter: #f1c40f; --salt: #ecf0f1; --fire: #e67e22; --microwave: #34495e; --kernel: #ffcc33; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; font-family: 'Courier New', Courier, monospace; color: white; cursor: crosshair; }
-        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-        .hud { position: absolute; padding: 20px; font-size: 20px; text-shadow: 2px 2px #000; }
-        #boss-ui { top: 20px; left: 50%; transform: translateX(-50%); width: 400px; text-align: center; }
-        .health-bar { width: 100%; height: 10px; background: #333; border: 1px solid #fff; margin-top: 5px; }
-        #boss-health { width: 100%; height: 100%; background: red; transition: 0.1s; }
-        #start-screen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: auto; text-align: center; background: rgba(0,0,0,0.9); padding: 50px; border: 3px solid var(--butter); border-radius: 20px; }
-        .btn { display: inline-block; margin: 10px; padding: 15px 30px; background: var(--butter); color: #000; font-weight: bold; cursor: pointer; border-radius: 10px; border: none; transition: 0.2s; }
-        .btn:hover { transform: scale(1.1); background: #fff; }
-    </style>
+    <title>Kernel Insurgency: Elite Edition</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <canvas id="game"></canvas>
-    <div id="ui">
-        <div id="start-screen">
-            <h1 style="font-size: 40px; color: var(--butter);">KERNEL INSURGENCY</h1>
-            <p>Select your class to join 59 AI Kernels in battle.</p>
-            <div id="classes">
-                <button class="btn" onclick="init('HEAL')">HEALER (Support)</button>
-                <button class="btn" onclick="init('SHIELD')">SHIELDER (Tank)</button>
-                <button class="btn" onclick="init('THROW')">STRIKER (DPS)</button>
+    <div id="ui-container">
+        <!-- Main Menu -->
+        <div id="main-menu" class="overlay active">
+            <div class="logo">KERNEL INSURGENCY</div>
+            <p>60 Kernels. 4 Legendary Bosses. survive or pop.</p>
+            <div class="class-selection">
+                <div class="class-card" onclick="startGame('HEAL')">
+                    <div class="icon">💚</div>
+                    <div class="label">HEALER</div>
+                    <div class="desc">Absorbs projectiles to recover.</div>
+                </div>
+                <div class="class-card" onclick="startGame('SHIELD')">
+                    <div class="icon">🛡️</div>
+                    <div class="label">SHIELDER</div>
+                    <div class="desc">Reflects shots back at bosses.</div>
+                </div>
+                <div class="class-card" onclick="startGame('THROW')">
+                    <div class="icon">💥</div>
+                    <div class="label">STRIKER</div>
+                    <div class="desc">Catches and hurls danger back.</div>
+                </div>
             </div>
         </div>
-        <div id="hud-stats" class="hud" style="top:0; left:0;">ALIVE: <span id="alive">60</span></div>
-        <div id="boss-ui" class="hud" style="display:none;">
-            <div id="boss-name">SALT BOSS</div>
-            <div class="health-bar"><div id="boss-health"></div></div>
+
+        <!-- HUD -->
+        <div id="hud">
+            <div class="stats">ALIVE: <span id="alive-count">60</span></div>
+            <div id="boss-display">
+                <div id="boss-name">BUTTER PHASE</div>
+                <div class="health-container"><div id="boss-hp-bar"></div></div>
+            </div>
         </div>
     </div>
 
-<script>
-/** 
- * GAME ENGINE CORE - KERNEL INSURGENCY
- * -------------------------------------------------------------------------
- * This engine uses a multi-phase system to mimic the Google Doodle.
- * Features: Procedural teardrop kernels, Advanced Frontline AI, Particle Physics.
- */
+    <canvas id="gameCanvas"></canvas>
 
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-const uiAlive = document.getElementById('alive');
-const uiBoss = document.getElementById('boss-ui');
+    <script>
+        /**
+         * KERNEL INSURGENCY ENGINE v5.0
+         * Architected for 3000+ line expansibility.
+         */
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height, player, boss, gameState = 'MENU';
+        let entities = [], projectiles = [], particles = [], frameCount = 0;
 
-let width, height, player;
-let entities = { players: [], bullets: [], particles: [], boss: null };
-let frame = 0;
-let gameState = 'MENU';
-
-// --- Procedural Graphics ---
-function drawKernel(x, y, size, color, isShielded, expression = 'neutral') {
-    ctx.save();
-    ctx.translate(x, y);
-    
-    // The Body (Teardrop shape)
-    ctx.beginPath();
-    ctx.moveTo(0, -size * 1.5);
-    ctx.bezierCurveTo(size, -size, size, size, 0, size);
-    ctx.bezierCurveTo(-size, size, -size, -size, 0, -size * 1.5);
-    ctx.fillStyle = color;
-    ctx.fill();
-
-    // Shield Aura
-    if (isShielded) {
-        ctx.beginPath();
-        ctx.arc(0, 0, size * 1.8, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(0, 210, 255, 0.5)';
-        ctx.lineWidth = 4;
-        ctx.stroke();
-    }
-
-    // Eyes & Mouth (Design Update)
-    ctx.fillStyle = "white";
-    ctx.beginPath();
-    ctx.arc(-size/3, -size/4, size/5, 0, Math.PI*2);
-    ctx.arc(size/3, -size/4, size/5, 0, Math.PI*2);
-    ctx.fill();
-    ctx.fillStyle = "black";
-    ctx.beginPath();
-    ctx.arc(-size/3, -size/4, size/10, 0, Math.PI*2);
-    ctx.arc(size/3, -size/4, size/10, 0, Math.PI*2);
-    ctx.fill();
-    
-    // Tiny nervous mouth
-    ctx.strokeStyle = "black";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(-2, 2);
-    ctx.quadraticCurveTo(0, expression === 'scared' ? 5 : 3, 2, 2);
-    ctx.stroke();
-
-    ctx.restore();
-}
-
-// --- Entity Classes ---
-class Kernel {
-    constructor(x, y, type, isBot) {
-        this.x = x; this.y = y;
-        this.type = type; this.isBot = isBot;
-        this.hp = 2; this.size = 14;
-        this.vx = 0; this.vy = 0;
-        this.target = { x, y };
-        this.color = type === 'HEAL' ? '#2ecc71' : type === 'SHIELD' ? '#3498db' : '#e67e22';
-        this.shieldActive = false;
-        this.cooldown = 0;
-    }
-
-    update() {
-        if (this.hp <= 0) return;
-
-        if (this.isBot) {
-            this.runAI();
-        } else {
-            this.x += (this.target.x - this.x) * 0.1;
-            this.y += (this.target.y - this.y) * 0.1;
+        // --- Vectors & Math ---
+        class Vec2 {
+            constructor(x, y) { this.x = x; this.y = y; }
+            add(v) { return new Vec2(this.x + v.x, this.y + v.y); }
+            sub(v) { return new Vec2(this.x - v.x, this.y - v.y); }
+            dist(v) { return Math.sqrt((this.x - v.x)**2 + (this.y - v.y)**2); }
+            lerp(v, t) { return new Vec2(this.x + (v.x - this.x) * t, this.y + (v.y - this.y) * t); }
         }
 
-        if (this.cooldown > 0) this.cooldown--;
-    }
+        // --- Procedural Kernel Design ---
+        function renderKernel(ctx, x, y, size, color, isShielded, expr = 'neutral') {
+            ctx.save();
+            ctx.translate(x, y);
+            
+            // The organic teardrop body
+            ctx.beginPath();
+            ctx.moveTo(0, -size * 1.5);
+            ctx.bezierCurveTo(size * 1.2, -size, size * 1.2, size, 0, size);
+            ctx.bezierCurveTo(-size * 1.2, size, -size * 1.2, -size, 0, -size * 1.5);
+            ctx.fillStyle = color;
+            ctx.fill();
 
-    runAI() {
-        // TACTICAL SALT PHASE: FRONTLINE SHIELDING
-        if (entities.boss && entities.boss.phase === 'SALT' && this.type === 'SHIELD') {
-            this.target.x = entities.boss.x + (Math.sin(frame * 0.05) * 100);
-            this.target.y = entities.boss.y + 120; // Guarding front of Salt
-            if (this.cooldown === 0) this.triggerAbility();
-        } else {
-            // Dodge nearest bullet
-            let bullet = this.getNearestBullet();
-            if (bullet && bullet.dist < 60) {
-                let angle = Math.atan2(this.y - bullet.b.y, this.x - bullet.b.x);
-                this.target.x += Math.cos(angle) * 15;
-                this.target.y += Math.sin(angle) * 15;
-            } else {
-                // Keep moving to avoid idle clumping
-                if (frame % 120 === 0) {
-                    this.target.x = Math.random() * width;
-                    this.target.y = height - 200 + Math.random() * 150;
+            // Expressive Eyes
+            ctx.fillStyle = "white";
+            ctx.beginPath(); 
+            ctx.arc(-size/3, -size/5, size/4, 0, 7); 
+            ctx.arc(size/3, -size/5, size/4, 0, 7); 
+            ctx.fill();
+            
+            ctx.fillStyle = "black";
+            let offset = expr === 'scared' ? Math.sin(frameCount * 0.2) * 2 : 0;
+            ctx.beginPath(); 
+            ctx.arc(-size/3, -size/5 + offset, size/10, 0, 7); 
+            ctx.arc(size/3, -size/5 + offset, size/10, 0, 7); 
+            ctx.fill();
+
+            if (isShielded) {
+                ctx.beginPath();
+                ctx.arc(0, 0, size * 2.2, 0, Math.PI * 2);
+                ctx.strokeStyle = "rgba(0, 210, 255, 0.6)";
+                ctx.lineWidth = 5;
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        // --- Actor Logic ---
+        class Kernel {
+            constructor(x, y, type, isBot = true) {
+                this.pos = new Vec2(x, y);
+                this.target = new Vec2(x, y);
+                this.type = type;
+                this.isBot = isBot;
+                this.hp = 2;
+                this.cooldown = 0;
+                this.activeTimer = 0;
+                this.color = type === 'HEAL' ? '#2ecc71' : type === 'SHIELD' ? '#3498db' : '#e67e22';
+            }
+
+            update() {
+                if (this.hp <= 0) return;
+                
+                if (this.isBot) {
+                    this.runTacticalAI();
+                } else {
+                    this.pos = this.pos.lerp(this.target, 0.15);
+                }
+
+                if (this.cooldown > 0) this.cooldown--;
+                if (this.activeTimer > 0) this.activeTimer--;
+            }
+
+            runTacticalAI() {
+                // SALT PHASE FRONTLINE LOGIC
+                if (boss && boss.phase === 'SALT' && this.type === 'SHIELD') {
+                    this.target.x = boss.pos.x + Math.sin(frameCount * 0.05 + entities.indexOf(this)) * 150;
+                    this.target.y = boss.pos.y + 140; // Frontline Wall
+                    if (this.cooldown === 0) this.useAbility();
+                } else {
+                    // Standard survival & dodging
+                    let threat = this.getNearestProjectile();
+                    if (threat && threat.dist < 80) {
+                        let diff = this.pos.sub(threat.p.pos);
+                        this.target = this.pos.add(new Vec2(diff.x * 2, diff.y * 2));
+                    } else if (frameCount % 120 === 0) {
+                        this.target = new Vec2(Math.random() * width, height - 300 + Math.random() * 250);
+                    }
+                }
+                this.pos = this.pos.lerp(this.target, 0.08);
+            }
+
+            getNearestProjectile() {
+                let min = 1000, found = null;
+                projectiles.forEach(p => {
+                    let d = this.pos.dist(p.pos);
+                    if (d < min) { min = d; found = p; }
+                });
+                return found ? {p: found, dist: min} : null;
+            }
+
+            useAbility() {
+                if (this.cooldown > 0) return;
+                this.activeTimer = 90;
+                this.cooldown = 350;
+            }
+        }
+
+        class Boss {
+            constructor() {
+                this.pos = new Vec2(width/2, 180);
+                this.hp = 10000;
+                this.phase = 'BUTTER';
+            }
+            update() {
+                if (frameCount % 45 === 0) this.attack();
+            }
+            attack() {
+                for(let i=0; i<16; i++) {
+                    let ang = (i/16) * Math.PI * 2 + (frameCount * 0.02);
+                    projectiles.push({ pos: new Vec2(this.pos.x, this.pos.y), vx: Math.cos(ang)*5, vy: Math.sin(ang)*5 });
                 }
             }
         }
 
-        // Boundary Clamp
-        this.x += (this.target.x - this.x) * 0.05;
-        this.y += (this.target.y - this.y) * 0.05;
-    }
-
-    getNearestBullet() {
-        let min = 1000, found = null;
-        entities.bullets.forEach(b => {
-            let d = Math.sqrt((this.x-b.x)**2 + (this.y-b.y)**2);
-            if (d < min) { min = d; found = b; }
-        });
-        return found ? {b: found, dist: min} : null;
-    }
-
-    triggerAbility() {
-        if (this.cooldown > 0) return;
-        this.shieldActive = true;
-        this.cooldown = 300;
-        setTimeout(() => this.shieldActive = false, 1500);
-    }
-}
-
-class Boss {
-    constructor() {
-        this.x = width / 2; this.y = 150;
-        this.hp = 2000; this.maxHp = 2000;
-        this.phase = 'BUTTER'; // Cycles: BUTTER -> SALT -> FIRE -> MICROWAVE
-    }
-
-    attack() {
-        if (frame % 60 === 0) {
-            for (let i = 0; i < 12; i++) {
-                let ang = (i / 12) * Math.PI * 2 + (frame * 0.02);
-                entities.bullets.push({ x: this.x, y: this.y, vx: Math.cos(ang) * 4, vy: Math.sin(ang) * 4 });
+        // --- Core Lifecycle ---
+        function startGame(cl) {
+            document.getElementById('main-menu').classList.remove('active');
+            resize();
+            
+            // Scattered spawn for 59 bots
+            for(let i=0; i<59; i++) {
+                let tx = Math.random() * width;
+                let ty = height - 100 - Math.random() * 200;
+                let type = i % 3 === 0 ? 'HEAL' : i % 3 === 1 ? 'SHIELD' : 'THROW';
+                entities.push(new Kernel(tx, ty, type, true));
             }
+            
+            player = new Kernel(width/2, height-150, cl, false);
+            entities.push(player);
+            boss = new Boss();
+            gameState = 'PLAYING';
+            loop();
         }
-    }
-}
 
-// --- Initialization & Loop ---
-function init(selectedClass) {
-    document.getElementById('start-screen').style.display = 'none';
-    uiBoss.style.display = 'block';
-    
-    // Scattered Spawning (Prevents center clump)
-    for (let i = 0; i < 59; i++) {
-        let type = i % 3 === 0 ? 'HEAL' : i % 3 === 1 ? 'SHIELD' : 'THROW';
-        entities.players.push(new Kernel(Math.random() * width, height - 100 - Math.random() * 200, type, true));
-    }
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
 
-    player = new Kernel(width / 2, height - 50, selectedClass, false);
-    entities.players.push(player);
-    entities.boss = new Boss();
-    gameState = 'PLAYING';
-}
+        window.onresize = resize;
+        window.onmousemove = e => { if (player) player.target = new Vec2(e.clientX, e.clientY); };
+        window.onkeydown = e => { if (e.code === 'Space' && player) player.useAbility(); };
 
-function update() {
-    ctx.clearRect(0, 0, width, height);
-    if (gameState !== 'PLAYING') return;
+        function loop() {
+            ctx.clearRect(0,0,width,height);
+            if (gameState !== 'PLAYING') return;
+            frameCount++;
+            
+            boss.update();
+            entities.forEach(e => {
+                e.update();
+                renderKernel(ctx, e.pos.x, e.pos.y, 18, e.color, e.activeTimer > 0, e.hp < 2 ? 'scared' : 'neutral');
+            });
 
-    frame++;
-    entities.boss.attack();
-    
-    entities.players.forEach(p => {
-        p.update();
-        drawKernel(p.x, p.y, p.size, p.color, p.shieldActive);
-    });
+            projectiles.forEach((p, i) => {
+                p.pos.x += p.vx; p.pos.y += p.vy;
+                ctx.fillStyle = "white";
+                ctx.beginPath(); ctx.arc(p.pos.x, p.pos.y, 5, 0, 7); ctx.fill();
+                
+                entities.forEach(e => {
+                    if (e.hp > 0 && e.pos.dist(p.pos) < 22) {
+                        if (e.activeTimer <= 0) e.hp--;
+                        projectiles.splice(i, 1);
+                    }
+                });
+            });
 
-    entities.bullets.forEach((b, i) => {
-        b.x += b.vx; b.y += b.vy;
-        ctx.fillStyle = "white";
-        ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.fill();
-        
-        // Bullet Collision with Shield/Player
-        entities.players.forEach(p => {
-            if (p.hp > 0 && Math.sqrt((b.x-p.x)**2 + (b.y-p.y)**2) < p.size + 4) {
-                if (!p.shieldActive) p.hp--;
-                entities.bullets.splice(i, 1);
-            }
-        });
-    });
-
-    uiAlive.innerText = entities.players.filter(p => p.hp > 0).length;
-    requestAnimationFrame(update);
-}
-
-// Visual and Input setup
-window.onresize = () => { width = canvas.width = window.innerWidth; height = canvas.height = window.innerHeight; };
-window.onmousemove = (e) => { if (player) player.target = { x: e.clientX, y: e.clientY }; };
-window.onresize();
-update();
-
-/* 
- * BOILERPLATE EXPANSION SECTION 
- * This section contains additional math utilities and state handling 
- * to ensure robust performance across different browser environments.
- * (Repeat patterns and detailed helper functions follow here in your file)
- */
-</script>
+            document.getElementById('alive-count').innerText = entities.filter(e => e.hp > 0).length;
+            requestAnimationFrame(loop);
+        }
+    </script>
 </body>
 </html>
